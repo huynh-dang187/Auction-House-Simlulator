@@ -79,33 +79,32 @@ class AuctionServerGUI:
             
             self.log(f"--> {name} đã tham gia phòng.")
             
+            # Gửi thông tin ban đầu cho người mới vào
             if self.is_auction_active:
                 client_socket.send(f"START|{self.current_item}|{self.current_price}".encode('utf-8'))
-
-            # --- [LOGIC MỚI] XỬ LÝ DÍNH GÓI TIN ---
+            
+            # --- [ĐOẠN CODE QUAN TRỌNG NHẤT ĐỂ KHÔNG MẤT TIỀN] ---
             buffer = ""
             while True:
                 data = client_socket.recv(1024).decode('utf-8')
                 if not data: break
                 
-                buffer += data # Cộng dồn dữ liệu mới vào bộ đệm
+                buffer += data # Cộng dồn dữ liệu vào
                 
-                # Cứ hễ thấy dấu xuống dòng là cắt ra xử lý
+                # Cắt thịt từng miếng nhỏ dựa trên dấu xuống dòng
                 while "\n" in buffer:
-                    message, buffer = buffer.split("\n", 1) # Cắt 1 phát
+                    message, buffer = buffer.split("\n", 1)
                     
                     if message and message.startswith("BID|"):
                         self.process_bid(client_socket, message)
-            # --------------------------------------
+            # -----------------------------------------------------
 
         except:
             pass
         finally:
             if client_socket in self.clients:
                 self.clients.remove(client_socket)
-                name = self.client_names.get(client_socket, "Unknown")
                 del self.client_names[client_socket]
-                self.log(f"<-- {name} đã thoát.")
                 client_socket.close()
 
     def process_bid(self, client_socket, msg):
@@ -115,23 +114,21 @@ class AuctionServerGUI:
             bid_amount = int(msg.split("|")[1])
             player_name = self.client_names[client_socket]
 
-            # --- [NEW] ĐOẠN NÀY QUAN TRỌNG NHẤT ---
-            # Bắt đầu khóa biến current_price lại
             with self.auction_lock: 
                 self.current_price += bid_amount
                 self.highest_bidder = player_name
                 
-                self.log(f"$$ {player_name} trả thêm ${bid_amount}. Giá mới: ${self.current_price}")
+                # --- [SỬA Ở ĐÂY] ---
+                # Comment dòng này lại khi chạy Bot Test
+                # self.log(f"$$ {player_name} trả thêm ${bid_amount}...") 
+                print(f"$$ Giá mới: {self.current_price}") # Dùng print thay thế (nhẹ hơn GUI nhiều)
+                # -------------------
 
-                # Broadcast luôn trong lúc khóa để đảm bảo đồng bộ
                 update_msg = f"UPDATE|{self.current_price}|{player_name}"
                 self.broadcast(update_msg)
-            # Ra khỏi with -> Tự động mở khóa cho người khác vào
-            # --------------------------------------
 
         except ValueError:
             pass
-
     def broadcast(self, message):
         for client in self.clients:
             try:

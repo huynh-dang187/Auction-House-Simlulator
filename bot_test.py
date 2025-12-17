@@ -19,7 +19,7 @@ def run_bot(bot_name, times):
         
         # 3. SPAM LIÊN TỤC
         for i in range(times):
-            s.send(b"BID|10 \n")
+            s.send(b"BID|10\n")
             # Nghỉ cực ngắn để tránh dính gói tin (TCP Stream) 
             # nhưng vẫn đủ nhanh để gây áp lực cho Server
             time.sleep(0.01) 
