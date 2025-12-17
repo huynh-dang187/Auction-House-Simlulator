@@ -8,9 +8,9 @@ class AuctionServerGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("SÀN ĐẤU GIÁ - ADMIN (SERVER)")
-        self.root.geometry("450x450")
+        self.root.geometry("450x500") # Cao hơn chút để hiện log
 
-        # --- UI (Giữ nguyên, chỉ thêm biến lưu giá) ---
+        # --- UI (Giữ nguyên) ---
         self.label_title = tk.Label(root, text="QUẢN LÝ ĐẤU GIÁ", font=("Arial", 16, "bold"), fg="red")
         self.label_title.pack(pady=10)
 
@@ -30,17 +30,20 @@ class AuctionServerGUI:
         self.btn_start.pack(pady=15)
 
         tk.Label(root, text="Nhật ký hoạt động:").pack(anchor=tk.W, padx=10)
-        self.log_area = tk.Text(root, height=12, width=50, state='disabled', bg="#f0f0f0")
+        self.log_area = tk.Text(root, height=15, width=50, state='disabled', bg="#f0f0f0")
         self.log_area.pack(pady=5)
 
         # --- LOGIC MẠNG & GAME ---
-        self.clients = []       # Danh sách socket client
-        self.client_names = {}  # Map: socket -> tên người chơi
+        self.clients = []
+        self.client_names = {}
         
         self.current_item = ""
         self.current_price = 0
         self.highest_bidder = "Chưa có"
-        self.is_auction_active = False # Trạng thái game
+        self.is_auction_active = False
+        
+        # --- [NEW] KHÓA AN TOÀN ---
+        self.auction_lock = threading.Lock() # Tạo cái khóa
 
         self.start_server_socket()
 
@@ -64,39 +67,40 @@ class AuctionServerGUI:
         while True:
             try:
                 client_socket, client_addr = self.server_socket.accept()
-                # Tạo luồng riêng để xử lý client này ngay lập tức
                 threading.Thread(target=self.handle_client, args=(client_socket,), daemon=True).start()
             except:
                 break
 
     def handle_client(self, client_socket):
-        """Hàm xử lý logic cho từng người chơi"""
         try:
-            # 1. Nhận tên người chơi (Gói tin đầu tiên)
             name = client_socket.recv(1024).decode('utf-8')
             self.clients.append(client_socket)
             self.client_names[client_socket] = name
             
             self.log(f"--> {name} đã tham gia phòng.")
             
-            # Nếu đang đấu giá dở, gửi cập nhật cho người mới vào ngay
             if self.is_auction_active:
                 client_socket.send(f"START|{self.current_item}|{self.current_price}".encode('utf-8'))
-                client_socket.send(f"UPDATE|{self.current_price}|{self.highest_bidder}".encode('utf-8'))
 
-            # 2. Vòng lặp nhận lệnh (BID)
+            # --- [LOGIC MỚI] XỬ LÝ DÍNH GÓI TIN ---
+            buffer = ""
             while True:
-                msg = client_socket.recv(1024).decode('utf-8')
-                if not msg: break # Client ngắt kết nối
+                data = client_socket.recv(1024).decode('utf-8')
+                if not data: break
                 
-                # Xử lý giao thức: CMD|DATA
-                if msg.startswith("BID|"):
-                    self.process_bid(client_socket, msg)
+                buffer += data # Cộng dồn dữ liệu mới vào bộ đệm
+                
+                # Cứ hễ thấy dấu xuống dòng là cắt ra xử lý
+                while "\n" in buffer:
+                    message, buffer = buffer.split("\n", 1) # Cắt 1 phát
+                    
+                    if message and message.startswith("BID|"):
+                        self.process_bid(client_socket, message)
+            # --------------------------------------
 
         except:
-            pass # Lỗi kết nối thì bỏ qua
+            pass
         finally:
-            # Dọn dẹp khi client thoát
             if client_socket in self.clients:
                 self.clients.remove(client_socket)
                 name = self.client_names.get(client_socket, "Unknown")
@@ -105,51 +109,50 @@ class AuctionServerGUI:
                 client_socket.close()
 
     def process_bid(self, client_socket, msg):
-        """Xử lý logic đấu giá"""
-        if not self.is_auction_active: return # Chưa start thì không được bid
+        if not self.is_auction_active: return
 
         try:
-            # Msg dạng: BID|50
             bid_amount = int(msg.split("|")[1])
             player_name = self.client_names[client_socket]
 
-            # Cập nhật giá mới
-            self.current_price += bid_amount
-            self.highest_bidder = player_name
-            
-            self.log(f"$$ {player_name} trả thêm ${bid_amount}. Giá mới: ${self.current_price}")
+            # --- [NEW] ĐOẠN NÀY QUAN TRỌNG NHẤT ---
+            # Bắt đầu khóa biến current_price lại
+            with self.auction_lock: 
+                self.current_price += bid_amount
+                self.highest_bidder = player_name
+                
+                self.log(f"$$ {player_name} trả thêm ${bid_amount}. Giá mới: ${self.current_price}")
 
-            # BROADCAST: Gửi giá mới cho TẤT CẢ mọi người
-            update_msg = f"UPDATE|{self.current_price}|{player_name}"
-            self.broadcast(update_msg)
+                # Broadcast luôn trong lúc khóa để đảm bảo đồng bộ
+                update_msg = f"UPDATE|{self.current_price}|{player_name}"
+                self.broadcast(update_msg)
+            # Ra khỏi with -> Tự động mở khóa cho người khác vào
+            # --------------------------------------
 
         except ValueError:
             pass
 
     def broadcast(self, message):
-        """Gửi tin nhắn cho toàn bộ client đang kết nối"""
         for client in self.clients:
             try:
                 client.send(message.encode('utf-8'))
             except:
-                pass # Nếu gửi lỗi thì kệ (client đó chắc rớt mạng rồi)
+                pass
 
     def start_auction(self):
-        """Admin bấm Start"""
         item = self.entry_item.get()
         price_str = self.entry_price.get()
         
         if not item or not price_str: return
         
-        self.current_item = item
-        self.current_price = int(price_str)
-        self.highest_bidder = "Chưa có"
-        self.is_auction_active = True
+        # Cũng nên khóa lúc reset game cho chắc
+        with self.auction_lock:
+            self.current_item = item
+            self.current_price = int(price_str)
+            self.highest_bidder = "Chưa có"
+            self.is_auction_active = True
         
-        self.log(f"=== BẮT ĐẦU ĐẤU GIÁ: {item} - ${self.current_price} ===")
-        
-        # Gửi lệnh START cho tất cả client
-        # Protocol: START|Tên món|Giá gốc
+        self.log(f"=== BẮT ĐẦU: {item} - ${self.current_price} ===")
         msg = f"START|{self.current_item}|{self.current_price}"
         self.broadcast(msg)
 

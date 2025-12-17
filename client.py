@@ -109,7 +109,7 @@ class AuctionClientGUI:
         if self.client_socket:
             try:
                 # Protocol: BID|10
-                self.client_socket.send(f"BID|{amount}".encode('utf-8'))
+                self.client_socket.send(f"BID|{amount}\n".encode('utf-8'))
             except:
                 self.log_message("Mất kết nối Server!")
 
