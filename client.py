@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 import socket
 import threading
+import configparser
 
 class AuctionClientGUI:
     def __init__(self, root):
@@ -12,7 +13,7 @@ class AuctionClientGUI:
         self.client_socket = None
         self.is_connected = False
 
-        # --- [MỚI NGÀY 5] GIAO DIỆN LOGIN MAKEOVER ---
+        # --- MÀN HÌNH LOGIN ---
         self.frame_login = tk.Frame(root, bg="lightblue") 
         self.frame_login.pack(fill="both", expand=True) 
         
@@ -28,7 +29,6 @@ class AuctionClientGUI:
         self.entry_name.bind('<Return>', lambda event: self.connect_to_server())
         
         tk.Button(self.frame_login, text="THAM CHIẾN NGAY 🚀", bg="darkred", fg="white", font=("Arial", 12, "bold"), height=2, width=20, command=self.connect_to_server).pack(pady=30)
-        # -----------------------------------------------
 
         # --- MÀN HÌNH CHÍNH (Ẩn) ---
         self.frame_main = tk.Frame(root)
@@ -80,22 +80,37 @@ class AuctionClientGUI:
         tk.Button(frame_chat_input, text="Gửi", command=self.send_chat).pack(side=tk.RIGHT, padx=5)
 
     def connect_to_server(self):
+        # --- [FIX QUAN TRỌNG] CHẶN KẾT NỐI KÉP ---
+        if self.is_connected: return 
+        # ------------------------------------------
+
         name = self.entry_name.get()
         if not name: return messagebox.showwarning("Lỗi", "Nhập tên đi bro!")
         
         try:
+            # Đọc cấu hình
+            config = configparser.ConfigParser()
+            config.read('config.ini')
+            host = config.get('NETWORK', 'HOST', fallback='127.0.0.1')
+            port = config.getint('NETWORK', 'PORT', fallback=5555)
+
+            # Tạo Socket và Kết nối (CHỈ LÀM 1 LẦN)
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.client_socket.connect(("127.0.0.1", 5555))
+            self.client_socket.connect((host, port)) 
             self.client_socket.send(name.encode('utf-8'))
             
+            # Cập nhật trạng thái
             self.is_connected = True
             self.frame_login.pack_forget()
             self.frame_main.pack(fill="both", expand=True)
             self.root.title(f"Người chơi: {name}")
             
+            # Bắt đầu luồng nghe
             threading.Thread(target=self.listen_server, daemon=True).start()
+
         except Exception as e:
-            messagebox.showerror("Lỗi", f"Server chưa mở!\n{e}")
+            messagebox.showerror("Lỗi", f"Server chưa mở hoặc sai IP!\n{e}")
+            self.is_connected = False # Reset trạng thái nếu lỗi
 
     def listen_server(self):
         buffer = ""
@@ -129,10 +144,9 @@ class AuctionClientGUI:
             self.lbl_winner.config(text=f"Người giữ giá: {parts[2]}")
             self.add_chat_log(f"💰 {parts[2]} lên giá ${parts[1]}")
             
-            # --- [MỚI NGÀY 5] HIỆU ỨNG NHẤP NHÁY ---
+            # Hiệu ứng nhấp nháy
             self.lbl_current_price.config(bg="yellow", fg="red")
             self.root.after(500, lambda: self.lbl_current_price.config(bg="#f0f0f0", fg="green"))
-            # --------------------------------------
 
         elif msg.startswith("TIME|"):
             seconds = int(msg.split("|")[1])
@@ -153,12 +167,10 @@ class AuctionClientGUI:
             content = parts[2]
             self.add_chat_log(f"[{sender}]: {content}")
         
-        # --- [MỚI NGÀY 5] XỬ LÝ TỪ CHỐI (REJECT) ---
         elif msg.startswith("REJECT|"):
             reason = msg.split("|")[1]
             messagebox.showerror("Không vào được", f"Lỗi: {reason}")
             self.root.quit()
-        # -------------------------------------------
 
     def bid(self, amount):
         if self.client_socket:

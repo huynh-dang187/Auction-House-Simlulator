@@ -5,6 +5,7 @@ import threading
 import time
 import csv
 from datetime import datetime
+import configparser
 
 class AuctionServerGUI:
     def __init__(self, root):
@@ -72,10 +73,20 @@ class AuctionServerGUI:
 
     def start_server_socket(self):
         try:
+            # --- [MỚI] ĐỌC CẤU HÌNH ---
+            config = configparser.ConfigParser()
+            config.read('config.ini')
+            
+            # Lấy IP/Port từ file, nếu không có thì dùng mặc định
+            host = config.get('NETWORK', 'HOST', fallback='0.0.0.0') 
+            port = config.getint('NETWORK', 'PORT', fallback=5555)
+            # --------------------------
+
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.server_socket.bind(("0.0.0.0", 5555))
+            self.server_socket.bind((host, port)) # Dùng biến host, port vừa đọc
             self.server_socket.listen(5)
-            self.log("Server đang lắng nghe tại port 5555...")
+            
+            self.log(f"Server đang chạy tại {host}:{port}...")
             threading.Thread(target=self.receive_clients, daemon=True).start()
         except Exception as e:
             self.log(f"Lỗi Server: {e}")
