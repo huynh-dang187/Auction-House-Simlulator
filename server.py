@@ -3,8 +3,8 @@ from tkinter import messagebox
 import socket
 import threading
 import time
-import csv # [MỚI] Thư viện xử lý file CSV (Excel)
-from datetime import datetime # [MỚI] Để lấy thời gian hiện tại
+import csv
+from datetime import datetime
 
 class AuctionServerGUI:
     def __init__(self, root):
@@ -35,7 +35,6 @@ class AuctionServerGUI:
         self.btn_start = tk.Button(frame_btns, text="MỞ PHIÊN (30s)", bg="green", fg="white", font=("Arial", 11, "bold"), command=self.start_auction)
         self.btn_start.pack(side=tk.LEFT, padx=10)
 
-        # [MỚI] Nút xem lịch sử
         self.btn_history = tk.Button(frame_btns, text="XEM LỊCH SỬ", bg="orange", fg="white", font=("Arial", 11, "bold"), command=self.show_history)
         self.btn_history.pack(side=tk.LEFT, padx=10)
 
@@ -54,15 +53,11 @@ class AuctionServerGUI:
         self.time_left = 30
         self.auction_lock = threading.Lock()
 
-        # Tạo file history nếu chưa có (Ghi dòng tiêu đề)
         self.init_history_file()
-
         self.start_server_socket()
 
     def init_history_file(self):
-        """Tạo file CSV nếu chưa tồn tại"""
         try:
-            # Mode 'x' là tạo mới, nếu có rồi thì thôi
             with open("auction_history.csv", mode="x", newline="", encoding="utf-8") as file:
                 writer = csv.writer(file)
                 writer.writerow(["Thời gian", "Vật phẩm", "Người thắng", "Giá chốt ($)"])
@@ -96,6 +91,14 @@ class AuctionServerGUI:
     def handle_client(self, client_socket):
         try:
             name = client_socket.recv(1024).decode('utf-8')
+            
+            # --- [MỚI NGÀY 5] CHECK TRÙNG TÊN ---
+            if name in self.client_names.values():
+                client_socket.send("REJECT|Tên này đã có người dùng!\n".encode('utf-8'))
+                client_socket.close()
+                return
+            # ------------------------------------
+
             self.clients.append(client_socket)
             self.client_names[client_socket] = name
             self.log(f"--> {name} đã tham gia.")
@@ -187,52 +190,38 @@ class AuctionServerGUI:
             msg = f"WIN|{self.highest_bidder}|{self.current_price}"
             self.broadcast(msg)
             self.log(f"!!! KẾT THÚC: {self.highest_bidder} thắng với ${self.current_price}")
-            
-            # [MỚI] Lưu vào lịch sử
             self.save_history(self.current_item, self.highest_bidder, self.current_price)
 
-    # --- [MỚI] CÁC HÀM XỬ LÝ FILE ---
     def save_history(self, item, winner, price):
-        """Ghi kết quả vào file CSV"""
         try:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open("auction_history.csv", mode="a", newline="", encoding="utf-8") as file:
                 writer = csv.writer(file)
-                # Ghi dòng: Thời gian, Vật phẩm, Người thắng, Giá
                 writer.writerow([timestamp, item, winner, price])
             print("Đã lưu lịch sử đấu giá.")
         except Exception as e:
             print(f"Lỗi lưu file: {e}")
 
     def show_history(self):
-        """Hiện cửa sổ xem lịch sử"""
-        # Tạo cửa sổ phụ (Popup)
         history_window = tk.Toplevel(self.root)
         history_window.title("Lịch Sử Đấu Giá")
         history_window.geometry("600x400")
 
         tk.Label(history_window, text="LỊCH SỬ CÁC PHIÊN ĐẤU GIÁ", font=("Arial", 14, "bold"), fg="blue").pack(pady=10)
-
-        # Khung hiện nội dung (Scrollbar)
         text_area = tk.Text(history_window, height=15, width=70, font=("Consolas", 10))
         text_area.pack(pady=5, padx=10)
 
-        # Đọc file và hiện lên
         try:
             with open("auction_history.csv", mode="r", encoding="utf-8") as file:
                 reader = csv.reader(file)
                 for row in reader:
-                    # Định dạng dòng chữ cho đẹp
-                    # row là list: ['2024-12-12 10:00', 'Iphone', 'Teo', '1000']
                     formatted_row = f"{row[0]} | {row[1]:<15} | {row[2]:<10} | ${row[3]}\n"
                     text_area.insert(tk.END, formatted_row)
         except FileNotFoundError:
             text_area.insert(tk.END, "Chưa có dữ liệu lịch sử nào.")
         
-        text_area.config(state='disabled') # Không cho sửa
-        
-        btn_close = tk.Button(history_window, text="Đóng", command=history_window.destroy)
-        btn_close.pack(pady=5)
+        text_area.config(state='disabled')
+        tk.Button(history_window, text="Đóng", command=history_window.destroy).pack(pady=5)
 
 if __name__ == "__main__":
     root = tk.Tk()
