@@ -5,43 +5,56 @@ import socket
 import threading
 import configparser
 
-# Setup Theme
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
 class AuctionClientGUI(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("SÀN ĐẤU GIÁ V2 - CLIENT")
+        self.title("SÀN ĐẤU GIÁ V2 - CLIENT (DB INTEGRATED)")
         self.geometry("450x750")
         
         self.client_socket = None
         self.is_connected = False
+        self.balance = 0 # Lưu số dư
 
         # --- MÀN HÌNH LOGIN ---
         self.frame_login = ctk.CTkFrame(self, fg_color="transparent")
         self.frame_login.pack(fill="both", expand=True) 
         
-        ctk.CTkLabel(self.frame_login, text="SÀN ĐẤU GIÁ\nCYBERPUNK", font=("Arial", 28, "bold"), text_color="#e74c3c").pack(pady=60)
+        ctk.CTkLabel(self.frame_login, text="SÀN ĐẤU GIÁ\nCYBERPUNK", font=("Arial", 28, "bold"), text_color="#e74c3c").pack(pady=40)
         
         self.frame_input_login = ctk.CTkFrame(self.frame_login, corner_radius=20)
-        self.frame_input_login.pack(pady=20, padx=40, fill="x")
+        self.frame_input_login.pack(pady=10, padx=40, fill="x")
         
-        ctk.CTkLabel(self.frame_input_login, text="MẬT DANH:", font=("Arial", 14)).pack(pady=(20, 5))
-        self.entry_name = ctk.CTkEntry(self.frame_input_login, width=200, placeholder_text="Nhập tên...", height=40, font=("Arial", 14))
-        self.entry_name.pack(pady=10)
+        # USERNAME
+        ctk.CTkLabel(self.frame_input_login, text="TÀI KHOẢN:", font=("Arial", 12)).pack(pady=(15, 5))
+        self.entry_name = ctk.CTkEntry(self.frame_input_login, width=220, placeholder_text="Username")
+        self.entry_name.pack(pady=5)
+
+        # [MỚI] PASSWORD
+        ctk.CTkLabel(self.frame_input_login, text="MẬT KHẨU:", font=("Arial", 12)).pack(pady=(10, 5))
+        self.entry_pass = ctk.CTkEntry(self.frame_input_login, width=220, placeholder_text="Password", show="*")
+        self.entry_pass.pack(pady=(5, 20))
         
-        self.entry_name.bind('<Return>', lambda event: self.connect_to_server())
-        
-        self.btn_join = ctk.CTkButton(self.frame_login, text="THAM CHIẾN 🚀", fg_color="#e74c3c", hover_color="#c0392b", height=50, width=200, font=("Arial", 16, "bold"), command=self.connect_to_server)
-        self.btn_join.pack(pady=30)
+        # [MỚI] 2 NÚT LOGIN / REGISTER
+        self.btn_login = ctk.CTkButton(self.frame_login, text="ĐĂNG NHẬP", fg_color="#3498db", width=220, height=40, command=lambda: self.connect_server("LOGIN"))
+        self.btn_login.pack(pady=10)
+
+        self.btn_reg = ctk.CTkButton(self.frame_login, text="ĐĂNG KÝ MỚI", fg_color="#e67e22", width=220, height=40, command=lambda: self.connect_server("REGISTER"))
+        self.btn_reg.pack(pady=5)
+
 
         # --- MÀN HÌNH CHÍNH (Ẩn) ---
         self.frame_main = ctk.CTkFrame(self, fg_color="transparent")
         
-        # === PHẦN 1: ĐẤU GIÁ (GAME) ===
+        # Hiển thị số dư
+        self.lbl_balance = ctk.CTkLabel(self.frame_main, text="Ví: $0", font=("Arial", 16, "bold"), text_color="#f1c40f")
+        self.lbl_balance.pack(pady=(10, 0), padx=20, anchor="e")
+
+        # === PHẦN 1: ĐẤU GIÁ ===
         self.frame_auction = ctk.CTkFrame(self.frame_main, corner_radius=15, border_width=2, border_color="#3498db")
-        self.frame_auction.pack(pady=10, padx=10, fill="x")
+        self.frame_auction.pack(pady=5, padx=10, fill="x")
 
         self.lbl_timer = ctk.CTkLabel(self.frame_auction, text="WAITING...", font=("Impact", 30), text_color="#95a5a6")
         self.lbl_timer.pack(pady=10)
@@ -55,7 +68,6 @@ class AuctionClientGUI(ctk.CTk):
         self.lbl_winner = ctk.CTkLabel(self.frame_auction, text="Người giữ giá: ---", font=("Arial", 14), text_color="#3498db")
         self.lbl_winner.pack(pady=5)
 
-        # Các nút bấm
         self.frame_buttons = ctk.CTkFrame(self.frame_auction, fg_color="transparent")
         self.frame_buttons.pack(pady=15)
         
@@ -69,49 +81,74 @@ class AuctionClientGUI(ctk.CTk):
         # === PHẦN 2: CHAT ROOM ===
         self.frame_chat = ctk.CTkFrame(self.frame_main, corner_radius=15)
         self.frame_chat.pack(pady=5, padx=10, fill="both", expand=True)
-
         ctk.CTkLabel(self.frame_chat, text="KÊNH CHAT", font=("Arial", 12, "bold")).pack(pady=5)
-
         self.txt_chat_log = ctk.CTkTextbox(self.frame_chat, height=200)
         self.txt_chat_log.pack(pady=5, padx=10, fill="both", expand=True)
         self.txt_chat_log.configure(state="disabled")
-
         self.frame_chat_input = ctk.CTkFrame(self.frame_chat, fg_color="transparent")
         self.frame_chat_input.pack(side="bottom", fill="x", padx=10, pady=10)
-        
         self.entry_chat = ctk.CTkEntry(self.frame_chat_input, placeholder_text="Nhập tin nhắn...")
         self.entry_chat.pack(side="left", fill="x", expand=True, padx=(0, 10))
         self.entry_chat.bind('<Return>', lambda event: self.send_chat())
-        
         self.btn_send = ctk.CTkButton(self.frame_chat_input, text="Gửi", width=60, command=self.send_chat)
         self.btn_send.pack(side="right")
 
-    def connect_to_server(self):
-        if self.is_connected: return 
-
-        name = self.entry_name.get()
-        if not name: return messagebox.showwarning("Lỗi", "Nhập tên đi bro!")
+    def connect_server(self, action_type):
+        """Hàm xử lý Login/Register"""
+        user = self.entry_name.get()
+        pwd = self.entry_pass.get()
         
+        if not user or not pwd:
+            return messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập Tài khoản và Mật khẩu!")
+
         try:
             config = configparser.ConfigParser()
             config.read('config.ini')
             host = config.get('NETWORK', 'HOST', fallback='127.0.0.1')
             port = config.getint('NETWORK', 'PORT', fallback=5555)
 
-            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.client_socket.connect((host, port)) 
-            self.client_socket.send(name.encode('utf-8'))
+            # Tạo kết nối mới
+            temp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            temp_socket.connect((host, port))
             
-            self.is_connected = True
-            self.frame_login.pack_forget()
-            self.frame_main.pack(fill="both", expand=True)
-            self.title(f"Người chơi: {name}")
+            # Gửi lệnh: LOGIN|user|pass hoặc REGISTER|user|pass
+            msg = f"{action_type}|{user}|{pwd}"
+            temp_socket.send(msg.encode('utf-8'))
             
-            threading.Thread(target=self.listen_server, daemon=True).start()
+            # Nhận phản hồi
+            response = temp_socket.recv(1024).decode('utf-8')
+            
+            if response.startswith("AUTH_OK|"):
+                # Đăng nhập thành công
+                self.balance = int(response.split("|")[1])
+                self.lbl_balance.configure(text=f"Ví: ${self.balance}")
+                
+                self.client_socket = temp_socket
+                self.is_connected = True
+                
+                self.frame_login.pack_forget()
+                self.frame_main.pack(fill="both", expand=True)
+                self.title(f"Người chơi: {user}")
+                
+                threading.Thread(target=self.listen_server, daemon=True).start()
+
+            elif response.startswith("AUTH_FAIL|"):
+                reason = response.split("|")[1]
+                messagebox.showerror("Đăng nhập thất bại", reason)
+                temp_socket.close()
+
+            elif response.startswith("REG_OK|"):
+                reason = response.split("|")[1]
+                messagebox.showinfo("Đăng ký thành công", reason)
+                temp_socket.close() # Đăng ký xong bắt đăng nhập lại
+
+            elif response.startswith("REG_FAIL|"):
+                reason = response.split("|")[1]
+                messagebox.showerror("Đăng ký thất bại", reason)
+                temp_socket.close()
 
         except Exception as e:
-            messagebox.showerror("Lỗi", f"Server chưa mở hoặc sai IP!\n{e}")
-            self.is_connected = False
+            messagebox.showerror("Lỗi kết nối", f"{e}")
 
     def listen_server(self):
         buffer = ""
@@ -123,8 +160,7 @@ class AuctionClientGUI(ctk.CTk):
                 while "\n" in buffer:
                     msg, buffer = buffer.split("\n", 1)
                     self.process_message(msg)
-            except:
-                break
+            except: break
         
         if self.is_connected:
             messagebox.showerror("Ngắt kết nối", "Server đã đóng!")
@@ -145,7 +181,6 @@ class AuctionClientGUI(ctk.CTk):
             self.lbl_winner.configure(text=f"Người giữ giá: {parts[2]}")
             self.add_chat_log(f"💰 {parts[2]} lên giá ${parts[1]}")
             
-            # Hiệu ứng nhấp nháy (Đổi màu chữ sang Đỏ rồi về Xanh)
             self.lbl_current_price.configure(text_color="red")
             self.after(500, lambda: self.lbl_current_price.configure(text_color="#2ecc71"))
 
@@ -170,9 +205,19 @@ class AuctionClientGUI(ctk.CTk):
         
         elif msg.startswith("REJECT|"):
             reason = msg.split("|")[1]
-            messagebox.showerror("Không vào được", f"Lỗi: {reason}")
-            self.destroy()
+            messagebox.showerror("Cảnh báo", reason) 
+            # Không thoát app, chỉ báo lỗi
+        elif msg.startswith("BALANCE|"):
+            new_bal = int(msg.split("|")[1])
+            self.balance = new_bal # Cập nhật biến
+            self.lbl_balance.configure(text=f"Ví: ${self.balance}") # Cập nhật giao diện
+        # ------------------------------------
 
+        elif msg.startswith("REJECT|"):
+            reason = msg.split("|")[1]
+            messagebox.showerror("Cảnh báo", reason)
+            
+            
     def bid(self, amount):
         if self.client_socket:
             try:
