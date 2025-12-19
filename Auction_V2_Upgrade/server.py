@@ -1,50 +1,56 @@
-import tkinter as tk
+import customtkinter as ctk  # [MỚI] Thư viện giao diện xịn
+import tkinter as tk         # Vẫn cần cho messagebox
 from tkinter import messagebox
 import socket
 import threading
 import time
 import csv
-from datetime import datetime
 import configparser
+from datetime import datetime
 
-class AuctionServerGUI:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("SÀN ĐẤU GIÁ - ADMIN (SERVER)")
-        self.root.geometry("500x650")
+# --- CẤU HÌNH GIAO DIỆN ---
+ctk.set_appearance_mode("Dark")       # Chế độ tối
+ctk.set_default_color_theme("blue")   # Màu chủ đạo xanh dương
+
+class AuctionServerGUI(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("SERVER ADMIN - SÀN ĐẤU GIÁ V2")
+        self.geometry("600x700")
 
         # --- GIAO DIỆN (UI) ---
-        self.label_title = tk.Label(root, text="QUẢN LÝ ĐẤU GIÁ", font=("Arial", 16, "bold"), fg="red")
-        self.label_title.pack(pady=10)
+        self.label_title = ctk.CTkLabel(self, text="HỆ THỐNG QUẢN TRỊ ĐẤU GIÁ", font=("Roboto", 24, "bold"), text_color="#3498db")
+        self.label_title.pack(pady=20)
 
-        # Khu vực nhập liệu
-        frame_input = tk.Frame(root)
-        frame_input.pack(pady=5)
+        # Khu vực nhập liệu (Dùng Frame bo góc)
+        self.frame_input = ctk.CTkFrame(self)
+        self.frame_input.pack(pady=10, padx=20, fill="x")
         
-        tk.Label(frame_input, text="Tên vật phẩm:").grid(row=0, column=0, padx=5, pady=5)
-        self.entry_item = tk.Entry(frame_input, width=20)
-        self.entry_item.grid(row=0, column=1, padx=5, pady=5)
+        ctk.CTkLabel(self.frame_input, text="Tên vật phẩm:").grid(row=0, column=0, padx=15, pady=10)
+        self.entry_item = ctk.CTkEntry(self.frame_input, width=300, placeholder_text="Ví dụ: iPhone 15 Pro Max")
+        self.entry_item.grid(row=0, column=1, padx=10, pady=10)
 
-        tk.Label(frame_input, text="Giá khởi điểm ($):").grid(row=1, column=0, padx=5, pady=5)
-        self.entry_price = tk.Entry(frame_input, width=20)
-        self.entry_price.grid(row=1, column=1, padx=5, pady=5)
+        ctk.CTkLabel(self.frame_input, text="Giá khởi điểm ($):").grid(row=1, column=0, padx=15, pady=10)
+        self.entry_price = ctk.CTkEntry(self.frame_input, width=300, placeholder_text="Ví dụ: 1000")
+        self.entry_price.grid(row=1, column=1, padx=10, pady=10)
 
         # Frame chứa các nút điều khiển
-        frame_btns = tk.Frame(root)
-        frame_btns.pack(pady=15)
+        self.frame_btns = ctk.CTkFrame(self, fg_color="transparent") # Transparent để nền trong suốt
+        self.frame_btns.pack(pady=15)
 
-        self.btn_start = tk.Button(frame_btns, text="MỞ PHIÊN (30s)", bg="green", fg="white", font=("Arial", 11, "bold"), command=self.start_auction)
-        self.btn_start.pack(side=tk.LEFT, padx=10)
+        self.btn_start = ctk.CTkButton(self.frame_btns, text="MỞ PHIÊN (30s)", fg_color="green", hover_color="darkgreen", font=("Arial", 14, "bold"), command=self.start_auction)
+        self.btn_start.pack(side="left", padx=10)
 
-        self.btn_history = tk.Button(frame_btns, text="XEM LỊCH SỬ", bg="orange", fg="white", font=("Arial", 11, "bold"), command=self.show_history)
-        self.btn_history.pack(side=tk.LEFT, padx=10)
+        self.btn_history = ctk.CTkButton(self.frame_btns, text="XEM LỊCH SỬ", fg_color="#e67e22", hover_color="#d35400", font=("Arial", 14, "bold"), command=self.show_history)
+        self.btn_history.pack(side="left", padx=10)
 
-        # Khu vực Log
-        tk.Label(root, text="Nhật ký hoạt động:").pack(anchor=tk.W, padx=10)
-        self.log_area = tk.Text(root, height=15, width=55, state='disabled', bg="#f0f0f0")
-        self.log_area.pack(pady=5)
+        # Khu vực Log (Dùng CTkTextbox xịn hơn)
+        ctk.CTkLabel(self, text="Nhật ký hoạt động (System Logs):", anchor="w").pack(fill="x", padx=25)
+        self.log_area = ctk.CTkTextbox(self, height=300)
+        self.log_area.pack(pady=5, padx=20, fill="both", expand=True)
+        self.log_area.configure(state="disabled") # Chỉ đọc
 
-        # --- LOGIC SERVER ---
+        # --- LOGIC SERVER (Giữ nguyên logic cũ) ---
         self.clients = []
         self.client_names = {}
         self.current_item = ""
@@ -66,27 +72,23 @@ class AuctionServerGUI:
             pass
 
     def log(self, message):
-        self.log_area.config(state='normal')
-        self.log_area.insert(tk.END, message + "\n")
-        self.log_area.see(tk.END)
-        self.log_area.config(state='disabled')
+        self.log_area.configure(state='normal')
+        self.log_area.insert("end", message + "\n") # Insert vào cuối
+        self.log_area.see("end") # Tự cuộn xuống
+        self.log_area.configure(state='disabled')
 
     def start_server_socket(self):
         try:
-            # --- [MỚI] ĐỌC CẤU HÌNH ---
             config = configparser.ConfigParser()
             config.read('config.ini')
-            
-            # Lấy IP/Port từ file, nếu không có thì dùng mặc định
             host = config.get('NETWORK', 'HOST', fallback='0.0.0.0') 
             port = config.getint('NETWORK', 'PORT', fallback=5555)
-            # --------------------------
 
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.server_socket.bind((host, port)) # Dùng biến host, port vừa đọc
+            self.server_socket.bind((host, port))
             self.server_socket.listen(5)
             
-            self.log(f"Server đang chạy tại {host}:{port}...")
+            self.log(f"Server đang chạy (v2) tại {host}:{port}...")
             threading.Thread(target=self.receive_clients, daemon=True).start()
         except Exception as e:
             self.log(f"Lỗi Server: {e}")
@@ -103,12 +105,10 @@ class AuctionServerGUI:
         try:
             name = client_socket.recv(1024).decode('utf-8')
             
-            # --- [MỚI NGÀY 5] CHECK TRÙNG TÊN ---
             if name in self.client_names.values():
                 client_socket.send("REJECT|Tên này đã có người dùng!\n".encode('utf-8'))
                 client_socket.close()
                 return
-            # ------------------------------------
 
             self.clients.append(client_socket)
             self.client_names[client_socket] = name
@@ -214,27 +214,27 @@ class AuctionServerGUI:
             print(f"Lỗi lưu file: {e}")
 
     def show_history(self):
-        history_window = tk.Toplevel(self.root)
+        history_window = ctk.CTkToplevel(self) # Dùng Toplevel của CustomTkinter
         history_window.title("Lịch Sử Đấu Giá")
-        history_window.geometry("600x400")
+        history_window.geometry("700x500")
+        history_window.attributes("-topmost", True) # Luôn hiện trên cùng
 
-        tk.Label(history_window, text="LỊCH SỬ CÁC PHIÊN ĐẤU GIÁ", font=("Arial", 14, "bold"), fg="blue").pack(pady=10)
-        text_area = tk.Text(history_window, height=15, width=70, font=("Consolas", 10))
-        text_area.pack(pady=5, padx=10)
+        ctk.CTkLabel(history_window, text="LỊCH SỬ CÁC PHIÊN ĐẤU GIÁ", font=("Arial", 18, "bold"), text_color="#e67e22").pack(pady=15)
+        
+        text_area = ctk.CTkTextbox(history_window, height=350)
+        text_area.pack(pady=5, padx=20, fill="both", expand=True)
 
         try:
             with open("auction_history.csv", mode="r", encoding="utf-8") as file:
                 reader = csv.reader(file)
                 for row in reader:
                     formatted_row = f"{row[0]} | {row[1]:<15} | {row[2]:<10} | ${row[3]}\n"
-                    text_area.insert(tk.END, formatted_row)
+                    text_area.insert("end", formatted_row)
         except FileNotFoundError:
-            text_area.insert(tk.END, "Chưa có dữ liệu lịch sử nào.")
+            text_area.insert("end", "Chưa có dữ liệu lịch sử nào.")
         
-        text_area.config(state='disabled')
-        tk.Button(history_window, text="Đóng", command=history_window.destroy).pack(pady=5)
+        text_area.configure(state='disabled')
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = AuctionServerGUI(root)
-    root.mainloop()
+    app = AuctionServerGUI()
+    app.mainloop()
