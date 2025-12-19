@@ -5,150 +5,181 @@ import socket
 import threading
 import configparser
 
+# --- THEME CONFIG ---
+COLOR_BG = "#121212"
+COLOR_CARD = "#1e1e1e"
+COLOR_PRIMARY = "#3D5AFE" # Xanh đậm hiện đại
+COLOR_SUCCESS = "#00E676" # Xanh lá Neon
+COLOR_WARNING = "#FFC107" # Vàng
+COLOR_ERROR = "#FF1744"   # Đỏ
+COLOR_TEXT = "#ECEFF1"
+
 ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
+ctk.set_default_color_theme("dark-blue")
 
 class AuctionClientGUI(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("SÀN ĐẤU GIÁ V2 - CLIENT (DB INTEGRATED)")
-        self.geometry("450x750")
+        self.title("BID WARS: ONLINE")
+        self.geometry("450x800")
+        self.configure(fg_color=COLOR_BG)
         
         self.client_socket = None
         self.is_connected = False
-        self.balance = 0 # Lưu số dư
+        self.balance = 0 
 
-        # --- MÀN HÌNH LOGIN ---
+        # --- LOGIN SCREEN (CENTERED CARD) ---
         self.frame_login = ctk.CTkFrame(self, fg_color="transparent")
-        self.frame_login.pack(fill="both", expand=True) 
+        self.frame_login.pack(fill="both", expand=True)
         
-        ctk.CTkLabel(self.frame_login, text="SÀN ĐẤU GIÁ\nCYBERPUNK", font=("Arial", 28, "bold"), text_color="#e74c3c").pack(pady=40)
+        # Center Container
+        self.center_box = ctk.CTkFrame(self.frame_login, fg_color=COLOR_CARD, corner_radius=20, border_width=1, border_color="#333")
+        self.center_box.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.85, relheight=0.7)
+
+        ctk.CTkLabel(self.center_box, text="BID WARS", font=("Impact", 40), text_color=COLOR_PRIMARY).pack(pady=(40, 5))
+        ctk.CTkLabel(self.center_box, text="Marketplace Access", font=("Arial", 12), text_color="gray").pack(pady=(0, 20))
+
+        # TABS
+        self.tab_view = ctk.CTkTabview(self.center_box, width=300, height=300, corner_radius=15, fg_color="transparent")
+        self.tab_view.pack(pady=10, fill="both", expand=True)
         
-        self.frame_input_login = ctk.CTkFrame(self.frame_login, corner_radius=20)
-        self.frame_input_login.pack(pady=10, padx=40, fill="x")
-        
-        # USERNAME
-        ctk.CTkLabel(self.frame_input_login, text="TÀI KHOẢN:", font=("Arial", 12)).pack(pady=(15, 5))
-        self.entry_name = ctk.CTkEntry(self.frame_input_login, width=220, placeholder_text="Username")
-        self.entry_name.pack(pady=5)
+        self.tab_login = self.tab_view.add("LOGIN")
+        self.tab_reg = self.tab_view.add("REGISTER")
 
-        # [MỚI] PASSWORD
-        ctk.CTkLabel(self.frame_input_login, text="MẬT KHẨU:", font=("Arial", 12)).pack(pady=(10, 5))
-        self.entry_pass = ctk.CTkEntry(self.frame_input_login, width=220, placeholder_text="Password", show="*")
-        self.entry_pass.pack(pady=(5, 20))
-        
-        # [MỚI] 2 NÚT LOGIN / REGISTER
-        self.btn_login = ctk.CTkButton(self.frame_login, text="ĐĂNG NHẬP", fg_color="#3498db", width=220, height=40, command=lambda: self.connect_server("LOGIN"))
-        self.btn_login.pack(pady=10)
+        # --> Tab Login
+        self.entry_login_user = ctk.CTkEntry(self.tab_login, placeholder_text="Username", height=45, fg_color="#111", border_color="#444")
+        self.entry_login_user.pack(pady=(20, 15), padx=20, fill="x")
+        self.entry_login_pass = ctk.CTkEntry(self.tab_login, placeholder_text="Password", height=45, fg_color="#111", border_color="#444", show="•")
+        self.entry_login_pass.pack(pady=(0, 20), padx=20, fill="x")
+        ctk.CTkButton(self.tab_login, text="ENTER MARKET", height=50, fg_color=COLOR_PRIMARY, font=("Arial", 14, "bold"), command=self.do_login).pack(pady=10, padx=20, fill="x")
 
-        self.btn_reg = ctk.CTkButton(self.frame_login, text="ĐĂNG KÝ MỚI", fg_color="#e67e22", width=220, height=40, command=lambda: self.connect_server("REGISTER"))
-        self.btn_reg.pack(pady=5)
+        # --> Tab Register
+        self.entry_reg_user = ctk.CTkEntry(self.tab_reg, placeholder_text="New Username", height=45, fg_color="#111", border_color="#444")
+        self.entry_reg_user.pack(pady=(10, 10), padx=20, fill="x")
+        self.entry_reg_pass = ctk.CTkEntry(self.tab_reg, placeholder_text="Password", height=45, fg_color="#111", border_color="#444", show="•")
+        self.entry_reg_pass.pack(pady=(0, 10), padx=20, fill="x")
+        self.entry_reg_confirm = ctk.CTkEntry(self.tab_reg, placeholder_text="Confirm Password", height=45, fg_color="#111", border_color="#444", show="•")
+        self.entry_reg_confirm.pack(pady=(0, 20), padx=20, fill="x")
+        ctk.CTkButton(self.tab_reg, text="CREATE ACCOUNT", height=50, fg_color=COLOR_SUCCESS, font=("Arial", 14, "bold"), text_color="black", command=self.do_register).pack(pady=10, padx=20, fill="x")
 
-
-        # --- MÀN HÌNH CHÍNH (Ẩn) ---
+        # --- MAIN GAME SCREEN ---
         self.frame_main = ctk.CTkFrame(self, fg_color="transparent")
         
-        # Hiển thị số dư
-        self.lbl_balance = ctk.CTkLabel(self.frame_main, text="Ví: $0", font=("Arial", 16, "bold"), text_color="#f1c40f")
-        self.lbl_balance.pack(pady=(10, 0), padx=20, anchor="e")
-
-        # === PHẦN 1: ĐẤU GIÁ ===
-        self.frame_auction = ctk.CTkFrame(self.frame_main, corner_radius=15, border_width=2, border_color="#3498db")
-        self.frame_auction.pack(pady=5, padx=10, fill="x")
-
-        self.lbl_timer = ctk.CTkLabel(self.frame_auction, text="WAITING...", font=("Impact", 30), text_color="#95a5a6")
-        self.lbl_timer.pack(pady=10)
-
-        self.lbl_item_name = ctk.CTkLabel(self.frame_auction, text="???", font=("Arial", 22, "bold"))
-        self.lbl_item_name.pack()
+        # 1. Header (Balance)
+        self.header_frame = ctk.CTkFrame(self.frame_main, height=60, fg_color=COLOR_CARD, corner_radius=0)
+        self.header_frame.pack(fill="x", pady=(0, 10))
         
-        self.lbl_current_price = ctk.CTkLabel(self.frame_auction, text="Giá: $0", font=("Arial", 26, "bold"), text_color="#2ecc71")
+        self.lbl_title = ctk.CTkLabel(self.header_frame, text="LIVE AUCTION", font=("Arial", 14, "bold"), text_color="gray")
+        self.lbl_title.pack(side="left", padx=20)
+        
+        self.lbl_balance = ctk.CTkButton(self.header_frame, text="$ 0", font=("Consolas", 16, "bold"), fg_color="#111", border_color="#ffd700", border_width=1, text_color="#ffd700", hover=False, width=100)
+        self.lbl_balance.pack(side="right", padx=15, pady=10)
+
+        # 2. The Arena (Item Card)
+        self.frame_arena = ctk.CTkFrame(self.frame_main, fg_color=COLOR_CARD, corner_radius=20, border_color="#333", border_width=1)
+        self.frame_arena.pack(pady=10, padx=15, fill="x")
+
+        # Timer Badge
+        self.lbl_timer = ctk.CTkButton(self.frame_arena, text="00s", width=60, height=30, fg_color="#333", hover=False, font=("Arial", 12, "bold"))
+        self.lbl_timer.pack(pady=(15, 5))
+
+        self.lbl_item_name = ctk.CTkLabel(self.frame_arena, text="WAITING FOR ITEM...", font=("Arial", 20, "bold"), text_color="white")
+        self.lbl_item_name.pack(pady=5)
+        
+        # Price Display (Big)
+        self.lbl_current_price = ctk.CTkLabel(self.frame_arena, text="$ 0", font=("Impact", 48), text_color=COLOR_SUCCESS)
         self.lbl_current_price.pack(pady=10)
         
-        self.lbl_winner = ctk.CTkLabel(self.frame_auction, text="Người giữ giá: ---", font=("Arial", 14), text_color="#3498db")
-        self.lbl_winner.pack(pady=5)
+        self.lbl_winner = ctk.CTkLabel(self.frame_arena, text="Current Highest: ---", font=("Arial", 12), text_color=COLOR_PRIMARY)
+        self.lbl_winner.pack(pady=(0, 20))
 
-        self.frame_buttons = ctk.CTkFrame(self.frame_auction, fg_color="transparent")
-        self.frame_buttons.pack(pady=15)
+        # 3. Control Pad (Buttons)
+        self.frame_controls = ctk.CTkFrame(self.frame_main, fg_color="transparent")
+        self.frame_controls.pack(pady=5, padx=15, fill="x")
         
-        self.btn_10 = ctk.CTkButton(self.frame_buttons, text="+$10", width=80, fg_color="#3498db", command=lambda: self.bid(10))
-        self.btn_10.pack(side="left", padx=5)
-        self.btn_50 = ctk.CTkButton(self.frame_buttons, text="+$50", width=80, fg_color="#e67e22", command=lambda: self.bid(50))
-        self.btn_50.pack(side="left", padx=5)
-        self.btn_100 = ctk.CTkButton(self.frame_buttons, text="+$100", width=80, fg_color="#e74c3c", command=lambda: self.bid(100))
-        self.btn_100.pack(side="left", padx=5)
+        self.btn_10 = ctk.CTkButton(self.frame_controls, text="+$10", height=50, fg_color="#333", font=("Arial", 14, "bold"), command=lambda: self.bid(10))
+        self.btn_10.pack(side="left", fill="x", expand=True, padx=5)
+        
+        self.btn_50 = ctk.CTkButton(self.frame_controls, text="+$50", height=50, fg_color="#444", font=("Arial", 14, "bold"), command=lambda: self.bid(50))
+        self.btn_50.pack(side="left", fill="x", expand=True, padx=5)
+        
+        self.btn_100 = ctk.CTkButton(self.frame_controls, text="+$100", height=50, fg_color="#555", font=("Arial", 14, "bold"), command=lambda: self.bid(100))
+        self.btn_100.pack(side="left", fill="x", expand=True, padx=5)
 
-        # === PHẦN 2: CHAT ROOM ===
-        self.frame_chat = ctk.CTkFrame(self.frame_main, corner_radius=15)
-        self.frame_chat.pack(pady=5, padx=10, fill="both", expand=True)
-        ctk.CTkLabel(self.frame_chat, text="KÊNH CHAT", font=("Arial", 12, "bold")).pack(pady=5)
-        self.txt_chat_log = ctk.CTkTextbox(self.frame_chat, height=200)
+        # 4. Chat Room
+        self.frame_chat = ctk.CTkFrame(self.frame_main, fg_color=COLOR_CARD, corner_radius=15)
+        self.frame_chat.pack(pady=15, padx=15, fill="both", expand=True)
+        
+        ctk.CTkLabel(self.frame_chat, text="LIVE CHAT", font=("Arial", 10, "bold"), text_color="gray").pack(pady=5, anchor="w", padx=15)
+        
+        self.txt_chat_log = ctk.CTkTextbox(self.frame_chat, fg_color="#111", text_color="#ccc", font=("Arial", 12))
         self.txt_chat_log.pack(pady=5, padx=10, fill="both", expand=True)
         self.txt_chat_log.configure(state="disabled")
-        self.frame_chat_input = ctk.CTkFrame(self.frame_chat, fg_color="transparent")
-        self.frame_chat_input.pack(side="bottom", fill="x", padx=10, pady=10)
-        self.entry_chat = ctk.CTkEntry(self.frame_chat_input, placeholder_text="Nhập tin nhắn...")
+        
+        self.chat_input_frame = ctk.CTkFrame(self.frame_chat, fg_color="transparent")
+        self.chat_input_frame.pack(side="bottom", fill="x", padx=10, pady=10)
+        
+        self.entry_chat = ctk.CTkEntry(self.chat_input_frame, placeholder_text="Say something...", height=40, fg_color="#222", border_color="#444")
         self.entry_chat.pack(side="left", fill="x", expand=True, padx=(0, 10))
         self.entry_chat.bind('<Return>', lambda event: self.send_chat())
-        self.btn_send = ctk.CTkButton(self.frame_chat_input, text="Gửi", width=60, command=self.send_chat)
+        
+        self.btn_send = ctk.CTkButton(self.chat_input_frame, text="➤", width=50, height=40, fg_color=COLOR_PRIMARY, command=self.send_chat)
         self.btn_send.pack(side="right")
 
-    def connect_server(self, action_type):
-        """Hàm xử lý Login/Register"""
-        user = self.entry_name.get()
-        pwd = self.entry_pass.get()
-        
-        if not user or not pwd:
-            return messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập Tài khoản và Mật khẩu!")
+    # --- LOGIC FUNCTIONS (GIỮ NGUYÊN) ---
+    def do_login(self):
+        user = self.entry_login_user.get()
+        pwd = self.entry_login_pass.get()
+        self.connect_server("LOGIN", user, pwd)
 
+    def do_register(self):
+        user = self.entry_reg_user.get()
+        pwd = self.entry_reg_pass.get()
+        confirm_pwd = self.entry_reg_confirm.get()
+        if pwd != confirm_pwd:
+            return messagebox.showerror("Error", "Passwords do not match!")
+        self.connect_server("REGISTER", user, pwd)
+
+    def connect_server(self, action_type, user, pwd):
+        if not user or not pwd:
+            return messagebox.showwarning("Warning", "Please fill all fields!")
         try:
             config = configparser.ConfigParser()
             config.read('config.ini')
             host = config.get('NETWORK', 'HOST', fallback='127.0.0.1')
             port = config.getint('NETWORK', 'PORT', fallback=5555)
 
-            # Tạo kết nối mới
             temp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             temp_socket.connect((host, port))
-            
-            # Gửi lệnh: LOGIN|user|pass hoặc REGISTER|user|pass
             msg = f"{action_type}|{user}|{pwd}"
             temp_socket.send(msg.encode('utf-8'))
-            
-            # Nhận phản hồi
             response = temp_socket.recv(1024).decode('utf-8')
             
             if response.startswith("AUTH_OK|"):
-                # Đăng nhập thành công
                 self.balance = int(response.split("|")[1])
-                self.lbl_balance.configure(text=f"Ví: ${self.balance}")
-                
+                self.lbl_balance.configure(text=f"$ {self.balance}")
                 self.client_socket = temp_socket
                 self.is_connected = True
-                
                 self.frame_login.pack_forget()
                 self.frame_main.pack(fill="both", expand=True)
-                self.title(f"Người chơi: {user}")
-                
+                self.title(f"PLAYER: {user}")
                 threading.Thread(target=self.listen_server, daemon=True).start()
 
             elif response.startswith("AUTH_FAIL|"):
-                reason = response.split("|")[1]
-                messagebox.showerror("Đăng nhập thất bại", reason)
+                messagebox.showerror("Failed", response.split("|")[1])
                 temp_socket.close()
 
             elif response.startswith("REG_OK|"):
-                reason = response.split("|")[1]
-                messagebox.showinfo("Đăng ký thành công", reason)
-                temp_socket.close() # Đăng ký xong bắt đăng nhập lại
-
-            elif response.startswith("REG_FAIL|"):
-                reason = response.split("|")[1]
-                messagebox.showerror("Đăng ký thất bại", reason)
+                messagebox.showinfo("Success", response.split("|")[1])
+                self.tab_view.set("LOGIN") 
+                self.entry_login_user.insert(0, user)
                 temp_socket.close()
 
+            elif response.startswith("REG_FAIL|"):
+                messagebox.showerror("Failed", response.split("|")[1])
+                temp_socket.close()
         except Exception as e:
-            messagebox.showerror("Lỗi kết nối", f"{e}")
+            messagebox.showerror("Connection Error", f"{e}")
 
     def listen_server(self):
         buffer = ""
@@ -161,63 +192,52 @@ class AuctionClientGUI(ctk.CTk):
                     msg, buffer = buffer.split("\n", 1)
                     self.process_message(msg)
             except: break
-        
         if self.is_connected:
-            messagebox.showerror("Ngắt kết nối", "Server đã đóng!")
+            messagebox.showerror("Disconnected", "Server closed connection.")
             self.destroy()
 
     def process_message(self, msg):
         if msg.startswith("START|"):
             parts = msg.split("|")
             self.lbl_item_name.configure(text=parts[1])
-            self.lbl_current_price.configure(text=f"Giá: ${parts[2]}", text_color="#2ecc71")
-            self.lbl_winner.configure(text="Người giữ giá: Chưa có")
-            self.lbl_timer.configure(text="30s", text_color="#3498db")
-            self.add_chat_log(f"--- BẮT ĐẦU: {parts[1]} ---")
+            self.lbl_current_price.configure(text=f"$ {parts[2]}", text_color=COLOR_SUCCESS)
+            self.lbl_winner.configure(text="Highest Bidder: ---")
+            self.lbl_timer.configure(text="30s", fg_color=COLOR_PRIMARY)
+            self.add_chat_log(f"--- SYSTEM: Auction Started for {parts[1]} ---")
 
         elif msg.startswith("UPDATE|"):
             parts = msg.split("|")
-            self.lbl_current_price.configure(text=f"Giá: ${parts[1]}")
-            self.lbl_winner.configure(text=f"Người giữ giá: {parts[2]}")
-            self.add_chat_log(f"💰 {parts[2]} lên giá ${parts[1]}")
-            
-            self.lbl_current_price.configure(text_color="red")
-            self.after(500, lambda: self.lbl_current_price.configure(text_color="#2ecc71"))
+            self.lbl_current_price.configure(text=f"$ {parts[1]}")
+            self.lbl_winner.configure(text=f"Highest Bidder: {parts[2]}")
+            self.add_chat_log(f"💰 {parts[2]} bid ${parts[1]}")
+            self.lbl_current_price.configure(text_color=COLOR_WARNING)
+            self.after(300, lambda: self.lbl_current_price.configure(text_color=COLOR_SUCCESS))
+
+        elif msg.startswith("BALANCE|"):
+            new_bal = int(msg.split("|")[1])
+            self.balance = new_bal
+            self.lbl_balance.configure(text=f"$ {self.balance}")
 
         elif msg.startswith("TIME|"):
             seconds = int(msg.split("|")[1])
             self.lbl_timer.configure(text=f"{seconds}s")
-            if seconds <= 5: self.lbl_timer.configure(text_color="red")
+            if seconds <= 5: self.lbl_timer.configure(fg_color=COLOR_ERROR)
 
         elif msg.startswith("WIN|"):
             parts = msg.split("|")
             winner = parts[1]
             price = parts[2]
-            self.lbl_timer.configure(text="HẾT GIỜ", text_color="#9b59b6")
-            messagebox.showinfo("KẾT THÚC", f"{winner} win giá ${price}!")
-            self.add_chat_log(f"🏆 {winner} VÔ ĐỊCH (${price})")
+            self.lbl_timer.configure(text="END", fg_color="#9b59b6")
+            messagebox.showinfo("AUCTION ENDED", f"{winner} won for ${price}!")
+            self.add_chat_log(f"🏆 {winner} WON THE ITEM (${price})")
 
         elif msg.startswith("CHAT|"):
             parts = msg.split("|", 2)
-            sender = parts[1]
-            content = parts[2]
-            self.add_chat_log(f"[{sender}]: {content}")
+            self.add_chat_log(f"[{parts[1]}]: {parts[2]}")
         
         elif msg.startswith("REJECT|"):
-            reason = msg.split("|")[1]
-            messagebox.showerror("Cảnh báo", reason) 
-            # Không thoát app, chỉ báo lỗi
-        elif msg.startswith("BALANCE|"):
-            new_bal = int(msg.split("|")[1])
-            self.balance = new_bal # Cập nhật biến
-            self.lbl_balance.configure(text=f"Ví: ${self.balance}") # Cập nhật giao diện
-        # ------------------------------------
+            messagebox.showerror("Alert", msg.split("|")[1])
 
-        elif msg.startswith("REJECT|"):
-            reason = msg.split("|")[1]
-            messagebox.showerror("Cảnh báo", reason)
-            
-            
     def bid(self, amount):
         if self.client_socket:
             try:
