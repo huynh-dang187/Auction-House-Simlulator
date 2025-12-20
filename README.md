@@ -24,9 +24,17 @@ Open your terminal (CMD/PowerShell) in the project folder and install the requir
 ```bash
 pip install -r requirements.txt
 
----
+2. Running the System
+
+Step 1: Start the Server (Important: You must enter the Source_Code folder first)
+cd Source_Code
 python server.py
+
+Step 2: Start the Client (Open a new terminal, navigate to Source_Code, and run)
+cd Source_Code
 python client.py
+---
+
 
 ## 📂 PROJECT STRUCTURE
 
