@@ -35,7 +35,9 @@
 ---
 
 ## 📂 PROJECT STRUCTURE
-Nhom13_Auction_System/             
+
+```text
+Nhom13_Auction_System/
 │
 ├── README.md                       <-- Project documentation and setup guide
 │
@@ -44,18 +46,18 @@ Nhom13_Auction_System/
 │   ├── Auction_Server.exe          <-- Server executable (Run this FIRST)
 │   ├── Auction_Client.exe          <-- Client executable (Run this SECOND)
 │   │
-│   ├── config.ini                  <-- Network configuration file (Critical for connection)
+│   ├── config.ini                  <-- Network configuration file (Critical)
 │   │
-│   ├── assets/                     <-- Contains product images (Required for display)
+│   ├── assets/                     <-- Contains product images (Required)
 │   │   ├── iphone.png
 │   │   └── ...
 │   │
-│   └── sounds/                     <-- Contains sound effects (Required for audio)
+│   └── sounds/                     <-- Contains sound effects (Required)
 │       ├── bid.wav
 │       ├── tick.wav
 │       └── win.wav
 │
-└── Source_Code/                    <-- Original Python scripts (For teacher/dev review)
+└── Source_Code/                    <-- Original Python scripts (For review)
     │
     ├── server.py                   <-- Server logic and socket handling
     ├── client.py                   <-- Client GUI and interaction logic
