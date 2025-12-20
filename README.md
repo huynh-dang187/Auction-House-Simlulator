@@ -16,14 +16,17 @@
 
 ##  INSTALLATION & USAGE
 
-### Run from Source
-*Requires Python installed.*
+*(Note: Due to file size limits, this project is submitted as Source Code. Please follow the steps below to run.)*
 
-1.  Install dependencies: `pip install customtkinter pillow`
-2.  Start Server: `python server.py`
-3.  Start Client: `python client.py`
+### 1. Environment Setup
+Open your terminal (CMD/PowerShell) in the project folder and install the required libraries:
+
+```bash
+pip install -r requirements.txt
 
 ---
+python server.py
+python client.py
 
 ## 📂 PROJECT STRUCTURE
 
@@ -31,7 +34,7 @@
 Nhom13_Auction_System/
 │
 ├── README.md                       <-- Project documentation and setup guide
-│
+├── requirements.txt
 └── Source_Code/                    <-- Original Python scripts (For review)
     │
     ├── server.py                   <-- Server logic and socket handling
