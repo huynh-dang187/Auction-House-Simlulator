@@ -33,7 +33,7 @@ python server.py
 Step 2: Start the Client (Open a new terminal, navigate to Source_Code, and run)
 cd Source_Code
 python client.py
----
+```
 
 
 ## 📂 PROJECT STRUCTURE
