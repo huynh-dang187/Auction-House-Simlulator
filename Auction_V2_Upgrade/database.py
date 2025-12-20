@@ -24,23 +24,25 @@ class DatabaseManager:
         """Mã hóa mật khẩu bằng SHA256"""
         return hashlib.sha256(password.encode()).hexdigest()
 
-    def register_user(self, username, password):
-        """Đăng ký user mới, tặng $1000 làm vốn"""
+    # Sửa dòng này: thêm tham số initial_balance
+    def register_user(self, username, password, initial_balance):
+        """Đăng ký user mới với số dư tùy chọn"""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         
-        # Check xem tồn tại chưa
         cursor.execute("SELECT * FROM users WHERE username=?", (username,))
         if cursor.fetchone():
             conn.close()
             return False, "Tên này đã tồn tại!"
         
         hashed_pw = self.hash_password(password)
-        # Tặng 1000$ cho người mới
-        cursor.execute("INSERT INTO users VALUES (?, ?, ?)", (username, hashed_pw, 1000))
+        
+        # Sửa dòng này: thay số 1000 cứng bằng biến initial_balance
+        cursor.execute("INSERT INTO users VALUES (?, ?, ?)", (username, hashed_pw, initial_balance))
+        
         conn.commit()
         conn.close()
-        return True, "Đăng ký thành công! Bạn có $1000."
+        return True, f"Đăng ký thành công! Ví: ${initial_balance}"
 
     def login_user(self, username, password):
         """Kiểm tra đăng nhập"""

@@ -1,262 +1,245 @@
 import customtkinter as ctk
-import tkinter as tk
 from tkinter import messagebox
 import socket
 import threading
 import configparser
+from PIL import Image
+import base64
+import io
 
-# --- THEME CONFIG ---
-COLOR_BG = "#121212"
-COLOR_CARD = "#1e1e1e"
-COLOR_PRIMARY = "#3D5AFE" # Xanh đậm hiện đại
-COLOR_SUCCESS = "#00E676" # Xanh lá Neon
-COLOR_WARNING = "#FFC107" # Vàng
-COLOR_ERROR = "#FF1744"   # Đỏ
-COLOR_TEXT = "#ECEFF1"
+# --- THEME ---
+COLOR_BG = "#1a1b26"       
+COLOR_CARD = "#24283b"     
+COLOR_PRIMARY = "#7aa2f7"  
+COLOR_SUCCESS = "#9ece6a"  
+COLOR_WARNING = "#e0af68"  
+COLOR_ERROR = "#f7768e"    
+COLOR_TEXT = "#c0caf5"     
 
 ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("dark-blue")
 
 class AuctionClientGUI(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("BID WARS: ONLINE")
-        self.geometry("450x800")
+        self.title("BID WARS: V5.1 COMPACT")
+        self.geometry("480x700") # [FIX] Giảm chiều cao xuống 700 cho vừa màn hình laptop
         self.configure(fg_color=COLOR_BG)
         
         self.client_socket = None
         self.is_connected = False
         self.balance = 0 
 
-        # --- LOGIN SCREEN (CENTERED CARD) ---
+        # --- LOGIN SCREEN ---
         self.frame_login = ctk.CTkFrame(self, fg_color="transparent")
         self.frame_login.pack(fill="both", expand=True)
         
-        # Center Container
-        self.center_box = ctk.CTkFrame(self.frame_login, fg_color=COLOR_CARD, corner_radius=20, border_width=1, border_color="#333")
-        self.center_box.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.85, relheight=0.7)
+        box = ctk.CTkFrame(self.frame_login, fg_color=COLOR_CARD, corner_radius=20, border_color="#414868", border_width=1)
+        box.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.85)
 
-        ctk.CTkLabel(self.center_box, text="BID WARS", font=("Impact", 40), text_color=COLOR_PRIMARY).pack(pady=(40, 5))
-        ctk.CTkLabel(self.center_box, text="Marketplace Access", font=("Arial", 12), text_color="gray").pack(pady=(0, 20))
-
-        # TABS
-        self.tab_view = ctk.CTkTabview(self.center_box, width=300, height=300, corner_radius=15, fg_color="transparent")
-        self.tab_view.pack(pady=10, fill="both", expand=True)
+        ctk.CTkLabel(box, text="BID WARS", font=("Arial", 32, "bold"), text_color=COLOR_PRIMARY).pack(pady=(30, 5))
+        ctk.CTkLabel(box, text="Virtual Marketplace", font=("Arial", 12), text_color="#565f89").pack(pady=(0, 20))
         
-        self.tab_login = self.tab_view.add("LOGIN")
-        self.tab_reg = self.tab_view.add("REGISTER")
+        self.tab_view = ctk.CTkTabview(box, width=280, height=320, fg_color="transparent")
+        self.tab_view.pack(pady=10)
+        t_login = self.tab_view.add("LOGIN")
+        t_reg = self.tab_view.add("REGISTER")
 
-        # --> Tab Login
-        self.entry_login_user = ctk.CTkEntry(self.tab_login, placeholder_text="Username", height=45, fg_color="#111", border_color="#444")
-        self.entry_login_user.pack(pady=(20, 15), padx=20, fill="x")
-        self.entry_login_pass = ctk.CTkEntry(self.tab_login, placeholder_text="Password", height=45, fg_color="#111", border_color="#444", show="•")
-        self.entry_login_pass.pack(pady=(0, 20), padx=20, fill="x")
-        ctk.CTkButton(self.tab_login, text="ENTER MARKET", height=50, fg_color=COLOR_PRIMARY, font=("Arial", 14, "bold"), command=self.do_login).pack(pady=10, padx=20, fill="x")
+        # Inputs
+        def create_entry(parent, ph, show=None):
+            e = ctk.CTkEntry(parent, placeholder_text=ph, show=show, height=40, fg_color="#1a1b26", border_color="#414868")
+            e.pack(pady=8, fill="x")
+            return e
 
-        # --> Tab Register
-        self.entry_reg_user = ctk.CTkEntry(self.tab_reg, placeholder_text="New Username", height=45, fg_color="#111", border_color="#444")
-        self.entry_reg_user.pack(pady=(10, 10), padx=20, fill="x")
-        self.entry_reg_pass = ctk.CTkEntry(self.tab_reg, placeholder_text="Password", height=45, fg_color="#111", border_color="#444", show="•")
-        self.entry_reg_pass.pack(pady=(0, 10), padx=20, fill="x")
-        self.entry_reg_confirm = ctk.CTkEntry(self.tab_reg, placeholder_text="Confirm Password", height=45, fg_color="#111", border_color="#444", show="•")
-        self.entry_reg_confirm.pack(pady=(0, 20), padx=20, fill="x")
-        ctk.CTkButton(self.tab_reg, text="CREATE ACCOUNT", height=50, fg_color=COLOR_SUCCESS, font=("Arial", 14, "bold"), text_color="black", command=self.do_register).pack(pady=10, padx=20, fill="x")
+        self.u_login = create_entry(t_login, "Username")
+        self.p_login = create_entry(t_login, "Password", "*")
+        ctk.CTkButton(t_login, text="LOG IN", height=40, fg_color=COLOR_PRIMARY, font=("Arial", 12, "bold"), command=self.do_login).pack(pady=15, fill="x")
+
+        self.u_reg = create_entry(t_reg, "New Username")
+        self.p_reg = create_entry(t_reg, "Password", "*")
+        self.b_reg = create_entry(t_reg, "Initial Balance ($)")
+        ctk.CTkButton(t_reg, text="REGISTER", height=40, fg_color=COLOR_SUCCESS, font=("Arial", 12, "bold"), text_color="#1a1b26", command=self.do_register).pack(pady=15, fill="x")
 
         # --- MAIN GAME SCREEN ---
         self.frame_main = ctk.CTkFrame(self, fg_color="transparent")
         
-        # 1. Header (Balance)
-        self.header_frame = ctk.CTkFrame(self.frame_main, height=60, fg_color=COLOR_CARD, corner_radius=0)
-        self.header_frame.pack(fill="x", pady=(0, 10))
+        # 1. HEADER
+        head = ctk.CTkFrame(self.frame_main, height=60, fg_color=COLOR_CARD, corner_radius=15, border_color="#414868", border_width=1)
+        head.pack(fill="x", pady=(10, 5), padx=10)
         
-        self.lbl_title = ctk.CTkLabel(self.header_frame, text="LIVE AUCTION", font=("Arial", 14, "bold"), text_color="gray")
-        self.lbl_title.pack(side="left", padx=20)
+        ctk.CTkLabel(head, text="👤", font=("Arial", 24)).pack(side="left", padx=(15, 5))
+        self.lbl_user = ctk.CTkLabel(head, text="Player", font=("Arial", 14, "bold"), text_color=COLOR_TEXT)
+        self.lbl_user.pack(side="left")
         
-        self.lbl_balance = ctk.CTkButton(self.header_frame, text="$ 0", font=("Consolas", 16, "bold"), fg_color="#111", border_color="#ffd700", border_width=1, text_color="#ffd700", hover=False, width=100)
-        self.lbl_balance.pack(side="right", padx=15, pady=10)
+        bal_frame = ctk.CTkFrame(head, fg_color="#1a1b26", corner_radius=10)
+        bal_frame.pack(side="right", padx=15, pady=8)
+        self.lbl_balance = ctk.CTkLabel(bal_frame, text="$ 0", font=("Impact", 18), text_color=COLOR_WARNING)
+        self.lbl_balance.pack(padx=15, pady=2)
 
-        # 2. The Arena (Item Card)
-        self.frame_arena = ctk.CTkFrame(self.frame_main, fg_color=COLOR_CARD, corner_radius=20, border_color="#333", border_width=1)
-        self.frame_arena.pack(pady=10, padx=15, fill="x")
+        # 2. ARENA (LAYOUT NGANG - FIX TRÀN MÀN HÌNH)
+        self.frame_arena = ctk.CTkFrame(self.frame_main, fg_color=COLOR_CARD, corner_radius=20)
+        self.frame_arena.pack(fill="x", padx=10, pady=5)
+        
+        # Chia cột: Cột 0 (Ảnh) - Cột 1 (Thông tin)
+        self.frame_arena.grid_columnconfigure(0, weight=0)
+        self.frame_arena.grid_columnconfigure(1, weight=1)
 
-        # Timer Badge
-        self.lbl_timer = ctk.CTkButton(self.frame_arena, text="00s", width=60, height=30, fg_color="#333", hover=False, font=("Arial", 12, "bold"))
-        self.lbl_timer.pack(pady=(15, 5))
+        # [Cột 0] Ảnh (Nhỏ hơn xíu: 140x140)
+        self.lbl_image_display = ctk.CTkLabel(self.frame_arena, text="", width=140, height=140, fg_color="#15161e", corner_radius=15)
+        self.lbl_image_display.grid(row=0, column=0, rowspan=4, padx=15, pady=15)
 
-        self.lbl_item_name = ctk.CTkLabel(self.frame_arena, text="WAITING FOR ITEM...", font=("Arial", 20, "bold"), text_color="white")
-        self.lbl_item_name.pack(pady=5)
-        
-        # Price Display (Big)
-        self.lbl_current_price = ctk.CTkLabel(self.frame_arena, text="$ 0", font=("Impact", 48), text_color=COLOR_SUCCESS)
-        self.lbl_current_price.pack(pady=10)
-        
-        self.lbl_winner = ctk.CTkLabel(self.frame_arena, text="Current Highest: ---", font=("Arial", 12), text_color=COLOR_PRIMARY)
-        self.lbl_winner.pack(pady=(0, 20))
+        # [Cột 1] Thông tin (Nằm bên phải ảnh)
+        self.lbl_timer = ctk.CTkButton(self.frame_arena, text="00s", width=60, height=25, fg_color="#1a1b26", hover=False, font=("Arial", 12, "bold"), text_color=COLOR_ERROR)
+        self.lbl_timer.grid(row=0, column=1, sticky="e", padx=15, pady=(15, 0))
 
-        # 3. Control Pad (Buttons)
-        self.frame_controls = ctk.CTkFrame(self.frame_main, fg_color="transparent")
-        self.frame_controls.pack(pady=5, padx=15, fill="x")
+        self.lbl_item_name = ctk.CTkLabel(self.frame_arena, text="WAITING...", font=("Arial", 18, "bold"), text_color="white", anchor="w")
+        self.lbl_item_name.grid(row=1, column=1, sticky="w", padx=5)
         
-        self.btn_10 = ctk.CTkButton(self.frame_controls, text="+$10", height=50, fg_color="#333", font=("Arial", 14, "bold"), command=lambda: self.bid(10))
-        self.btn_10.pack(side="left", fill="x", expand=True, padx=5)
+        self.lbl_current_price = ctk.CTkLabel(self.frame_arena, text="$ 0", font=("Impact", 36), text_color=COLOR_SUCCESS, anchor="w")
+        self.lbl_current_price.grid(row=2, column=1, sticky="w", padx=5)
         
-        self.btn_50 = ctk.CTkButton(self.frame_controls, text="+$50", height=50, fg_color="#444", font=("Arial", 14, "bold"), command=lambda: self.bid(50))
-        self.btn_50.pack(side="left", fill="x", expand=True, padx=5)
-        
-        self.btn_100 = ctk.CTkButton(self.frame_controls, text="+$100", height=50, fg_color="#555", font=("Arial", 14, "bold"), command=lambda: self.bid(100))
-        self.btn_100.pack(side="left", fill="x", expand=True, padx=5)
+        self.lbl_winner = ctk.CTkLabel(self.frame_arena, text="---", font=("Arial", 11), text_color=COLOR_PRIMARY, anchor="w")
+        self.lbl_winner.grid(row=3, column=1, sticky="w", padx=5, pady=(0, 15))
 
-        # 4. Chat Room
-        self.frame_chat = ctk.CTkFrame(self.frame_main, fg_color=COLOR_CARD, corner_radius=15)
-        self.frame_chat.pack(pady=15, padx=15, fill="both", expand=True)
+        # 3. CONTROL PAD
+        ctrl = ctk.CTkFrame(self.frame_main, fg_color="transparent")
+        ctrl.pack(fill="x", padx=10, pady=5)
         
-        ctk.CTkLabel(self.frame_chat, text="LIVE CHAT", font=("Arial", 10, "bold"), text_color="gray").pack(pady=5, anchor="w", padx=15)
-        
-        self.txt_chat_log = ctk.CTkTextbox(self.frame_chat, fg_color="#111", text_color="#ccc", font=("Arial", 12))
-        self.txt_chat_log.pack(pady=5, padx=10, fill="both", expand=True)
-        self.txt_chat_log.configure(state="disabled")
-        
-        self.chat_input_frame = ctk.CTkFrame(self.frame_chat, fg_color="transparent")
-        self.chat_input_frame.pack(side="bottom", fill="x", padx=10, pady=10)
-        
-        self.entry_chat = ctk.CTkEntry(self.chat_input_frame, placeholder_text="Say something...", height=40, fg_color="#222", border_color="#444")
-        self.entry_chat.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        self.entry_chat.bind('<Return>', lambda event: self.send_chat())
-        
-        self.btn_send = ctk.CTkButton(self.chat_input_frame, text="➤", width=50, height=40, fg_color=COLOR_PRIMARY, command=self.send_chat)
-        self.btn_send.pack(side="right")
+        def create_bid_btn(amt, color):
+            return ctk.CTkButton(ctrl, text=f"+${amt}", height=45, fg_color=color, font=("Arial", 15, "bold"), 
+                                 text_color="#1a1b26", command=lambda: self.bid(amt))
 
-    # --- LOGIC FUNCTIONS (GIỮ NGUYÊN) ---
-    def do_login(self):
-        user = self.entry_login_user.get()
-        pwd = self.entry_login_pass.get()
-        self.connect_server("LOGIN", user, pwd)
+        create_bid_btn(10, "#7dcfff").pack(side="left", fill="x", expand=True, padx=3)
+        create_bid_btn(50, "#7aa2f7").pack(side="left", fill="x", expand=True, padx=3)
+        create_bid_btn(100, "#bb9af7").pack(side="left", fill="x", expand=True, padx=3)
 
+        # 4. CHAT (Bây giờ sẽ có đủ chỗ để hiển thị)
+        self.txt_chat = ctk.CTkTextbox(self.frame_main, fg_color=COLOR_CARD, font=("Arial", 12), text_color="#a9b1d6", corner_radius=10)
+        self.txt_chat.pack(fill="both", padx=10, pady=(5, 5), expand=True) # expand=True để nó chiếm hết phần còn lại
+        self.txt_chat.configure(state="disabled")
+        
+        chat_in = ctk.CTkFrame(self.frame_main, fg_color="transparent")
+        chat_in.pack(fill="x", padx=10, pady=(0, 10))
+        self.entry_chat = ctk.CTkEntry(chat_in, placeholder_text="Type a message...", height=35, fg_color=COLOR_CARD, border_color="#414868")
+        self.entry_chat.pack(side="left", fill="x", expand=True)
+        self.entry_chat.bind('<Return>', lambda e: self.send_chat())
+        ctk.CTkButton(chat_in, text="➤", width=40, height=35, fg_color=COLOR_PRIMARY, command=self.send_chat).pack(side="right", padx=(5,0))
+
+    # --- LOGIC (GIỮ NGUYÊN) ---
+    def do_login(self): self.connect_server("LOGIN", self.u_login.get(), self.p_login.get())
     def do_register(self):
-        user = self.entry_reg_user.get()
-        pwd = self.entry_reg_pass.get()
-        confirm_pwd = self.entry_reg_confirm.get()
-        if pwd != confirm_pwd:
-            return messagebox.showerror("Error", "Passwords do not match!")
-        self.connect_server("REGISTER", user, pwd)
+        bal = self.b_reg.get()
+        if not bal.isdigit(): return messagebox.showerror("Error", "Balance must be number")
+        self.connect_server("REGISTER", self.u_reg.get(), self.p_reg.get(), bal)
 
-    def connect_server(self, action_type, user, pwd):
-        if not user or not pwd:
-            return messagebox.showwarning("Warning", "Please fill all fields!")
+    def connect_server(self, type, u, p, bal=None):
+        if not u or not p: return
         try:
             config = configparser.ConfigParser()
             config.read('config.ini')
             host = config.get('NETWORK', 'HOST', fallback='127.0.0.1')
             port = config.getint('NETWORK', 'PORT', fallback=5555)
-
-            temp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            temp_socket.connect((host, port))
-            msg = f"{action_type}|{user}|{pwd}"
-            temp_socket.send(msg.encode('utf-8'))
-            response = temp_socket.recv(1024).decode('utf-8')
             
-            if response.startswith("AUTH_OK|"):
-                self.balance = int(response.split("|")[1])
-                self.lbl_balance.configure(text=f"$ {self.balance}")
-                self.client_socket = temp_socket
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((host, port))
+            msg = f"{type}|{u}|{p}" + (f"|{bal}" if bal else "")
+            s.send(msg.encode('utf-8'))
+            resp = s.recv(1024).decode('utf-8')
+            
+            if resp.startswith("AUTH_OK|"):
+                self.balance = int(resp.split("|")[1])
+                self.update_balance_ui()
+                self.lbl_user.configure(text=u)
+                self.client_socket = s
                 self.is_connected = True
                 self.frame_login.pack_forget()
                 self.frame_main.pack(fill="both", expand=True)
-                self.title(f"PLAYER: {user}")
-                threading.Thread(target=self.listen_server, daemon=True).start()
+                self.title(f"BID WARS: {u}")
+                threading.Thread(target=self.listen, daemon=True).start()
+            elif resp.startswith("REG_OK|"):
+                messagebox.showinfo("Success", resp.split("|")[1])
+                s.close()
+            else:
+                messagebox.showerror("Error", resp)
+                s.close()
+        except Exception as e: messagebox.showerror("Error", str(e))
 
-            elif response.startswith("AUTH_FAIL|"):
-                messagebox.showerror("Failed", response.split("|")[1])
-                temp_socket.close()
+    def update_balance_ui(self):
+        self.lbl_balance.configure(text=f"$ {self.balance}")
 
-            elif response.startswith("REG_OK|"):
-                messagebox.showinfo("Success", response.split("|")[1])
-                self.tab_view.set("LOGIN") 
-                self.entry_login_user.insert(0, user)
-                temp_socket.close()
-
-            elif response.startswith("REG_FAIL|"):
-                messagebox.showerror("Failed", response.split("|")[1])
-                temp_socket.close()
-        except Exception as e:
-            messagebox.showerror("Connection Error", f"{e}")
-
-    def listen_server(self):
+    def listen(self):
         buffer = ""
         while self.is_connected:
             try:
-                data = self.client_socket.recv(1024).decode('utf-8')
+                data = self.client_socket.recv(40960).decode('utf-8') 
                 if not data: break
                 buffer += data
                 while "\n" in buffer:
                     msg, buffer = buffer.split("\n", 1)
-                    self.process_message(msg)
+                    self.process(msg)
             except: break
-        if self.is_connected:
-            messagebox.showerror("Disconnected", "Server closed connection.")
-            self.destroy()
+        if self.is_connected: self.destroy()
 
-    def process_message(self, msg):
+    def process(self, msg):
         if msg.startswith("START|"):
             parts = msg.split("|")
             self.lbl_item_name.configure(text=parts[1])
-            self.lbl_current_price.configure(text=f"$ {parts[2]}", text_color=COLOR_SUCCESS)
-            self.lbl_winner.configure(text="Highest Bidder: ---")
-            self.lbl_timer.configure(text="30s", fg_color=COLOR_PRIMARY)
-            self.add_chat_log(f"--- SYSTEM: Auction Started for {parts[1]} ---")
+            self.lbl_current_price.configure(text=f"$ {parts[2]}")
+            self.lbl_winner.configure(text="Waiting for bids...")
+            self.lbl_timer.configure(text="30s", fg_color="#1a1b26", text_color="white")
+            
+            img_str = parts[3]
+            if img_str and img_str != "NO_IMG":
+                try:
+                    img_bytes = base64.b64decode(img_str)
+                    pil_img = Image.open(io.BytesIO(img_bytes))
+                    ctk_img = ctk.CTkImage(pil_img, size=(140, 140)) # [FIX] Resize nhỏ lại cho layout ngang
+                    self.lbl_image_display.configure(image=ctk_img, text="")
+                except: self.lbl_image_display.configure(image=None, text="IMG ERR")
+            else: self.lbl_image_display.configure(image=None, text="[NO IMG]")
+            self.add_log(f"🔔 NEW ROUND: {parts[1]}")
 
         elif msg.startswith("UPDATE|"):
             parts = msg.split("|")
-            self.lbl_current_price.configure(text=f"$ {parts[1]}")
-            self.lbl_winner.configure(text=f"Highest Bidder: {parts[2]}")
-            self.add_chat_log(f"💰 {parts[2]} bid ${parts[1]}")
-            self.lbl_current_price.configure(text_color=COLOR_WARNING)
+            self.lbl_current_price.configure(text=f"$ {parts[1]}", text_color=COLOR_WARNING)
+            self.lbl_winner.configure(text=f"Last Bid: {parts[2]}")
+            self.add_log(f"💰 {parts[2]} bid ${parts[1]}")
             self.after(300, lambda: self.lbl_current_price.configure(text_color=COLOR_SUCCESS))
 
-        elif msg.startswith("BALANCE|"):
-            new_bal = int(msg.split("|")[1])
-            self.balance = new_bal
-            self.lbl_balance.configure(text=f"$ {self.balance}")
-
         elif msg.startswith("TIME|"):
-            seconds = int(msg.split("|")[1])
-            self.lbl_timer.configure(text=f"{seconds}s")
-            if seconds <= 5: self.lbl_timer.configure(fg_color=COLOR_ERROR)
+            t = int(msg.split("|")[1])
+            self.lbl_timer.configure(text=f"{t}s")
+            if t<=5: self.lbl_timer.configure(fg_color=COLOR_ERROR, text_color="#1a1b26")
 
         elif msg.startswith("WIN|"):
-            parts = msg.split("|")
-            winner = parts[1]
-            price = parts[2]
-            self.lbl_timer.configure(text="END", fg_color="#9b59b6")
-            messagebox.showinfo("AUCTION ENDED", f"{winner} won for ${price}!")
-            self.add_chat_log(f"🏆 {winner} WON THE ITEM (${price})")
+            self.lbl_timer.configure(text="END", fg_color="#bb9af7")
+            messagebox.showinfo("Result", f"{msg.split('|')[1]} won!")
+            self.add_log(f"🏆 WINNER: {msg.split('|')[1]}")
+
+        # [TÍNH NĂNG CẬP NHẬT TIỀN]
+        elif msg.startswith("BALANCE|"):
+            self.balance = int(msg.split("|")[1]) # Lấy số tiền mới từ Server
+            self.update_balance_ui()               # Cập nhật giao diện
 
         elif msg.startswith("CHAT|"):
-            parts = msg.split("|", 2)
-            self.add_chat_log(f"[{parts[1]}]: {parts[2]}")
-        
+            self.add_log(f"[{msg.split('|')[1]}]: {msg.split('|',2)[2]}")
+
         elif msg.startswith("REJECT|"):
-            messagebox.showerror("Alert", msg.split("|")[1])
+            messagebox.showerror("Error", msg.split("|")[1])
 
-    def bid(self, amount):
-        if self.client_socket:
-            try:
-                self.client_socket.send(f"BID|{amount}\n".encode('utf-8'))
-            except: pass
-
+    def bid(self, amt):
+        if self.client_socket: self.client_socket.send(f"BID|{amt}\n".encode('utf-8'))
+    
     def send_chat(self):
-        msg = self.entry_chat.get()
-        if msg and self.client_socket:
-            try:
-                self.client_socket.send(f"CHAT|{msg}\n".encode('utf-8'))
-                self.entry_chat.delete(0, "end")
-            except: pass
+        t = self.entry_chat.get()
+        if t: 
+            self.client_socket.send(f"CHAT|{t}\n".encode('utf-8'))
+            self.entry_chat.delete(0, "end")
 
-    def add_chat_log(self, msg):
-        self.txt_chat_log.configure(state="normal")
-        self.txt_chat_log.insert("end", msg + "\n")
-        self.txt_chat_log.see("end")
-        self.txt_chat_log.configure(state="disabled")
+    def add_log(self, t):
+        self.txt_chat.configure(state="normal")
+        self.txt_chat.insert("end", t+"\n")
+        self.txt_chat.see("end")
+        self.txt_chat.configure(state="disabled")
 
 if __name__ == "__main__":
     app = AuctionClientGUI()
