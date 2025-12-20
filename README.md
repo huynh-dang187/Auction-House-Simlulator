@@ -16,16 +16,7 @@
 
 ##  INSTALLATION & USAGE
 
-### Option 1: Run Executable (Recommended)
-*No Python installation required.*
-
-1.  Go to the **`Application`** folder.
-2.  Run **`Auction_Server.exe`** to start the host.
-3.  Run **`Auction_Client.exe`** (Open multiple instances to simulate players).
-
-**⚠️ Important:** Do not move the `.exe` files out of the folder containing `assets`, `sounds`, and `config.ini`.
-
-### Option 2: Run from Source
+### Run from Source
 *Requires Python installed.*
 
 1.  Install dependencies: `pip install customtkinter pillow`
@@ -40,22 +31,6 @@
 Nhom13_Auction_System/
 │
 ├── README.md                       <-- Project documentation and setup guide
-│
-├── Application/                    <-- Ready-to-run version (No Python required)
-│   │
-│   ├── Auction_Server.exe          <-- Server executable (Run this FIRST)
-│   ├── Auction_Client.exe          <-- Client executable (Run this SECOND)
-│   │
-│   ├── config.ini                  <-- Network configuration file (Critical)
-│   │
-│   ├── assets/                     <-- Contains product images (Required)
-│   │   ├── iphone.png
-│   │   └── ...
-│   │
-│   └── sounds/                     <-- Contains sound effects (Required)
-│       ├── bid.wav
-│       ├── tick.wav
-│       └── win.wav
 │
 └── Source_Code/                    <-- Original Python scripts (For review)
     │
