@@ -1,5 +1,6 @@
 import sqlite3
 import hashlib
+from datetime import datetime
 
 class DatabaseManager:
     def __init__(self, db_name="auction_data.db"):
@@ -7,9 +8,9 @@ class DatabaseManager:
         self.create_table()
 
     def create_table(self):
-        """Tạo bảng User nếu chưa có"""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
+        # Bảng Users
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY,
@@ -17,50 +18,47 @@ class DatabaseManager:
                 balance INTEGER
             )
         ''')
+        # [MỚI] Bảng Inventory (Lưu trữ vật phẩm đã mua)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS inventory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT,
+                item_name TEXT,
+                price INTEGER,
+                image_data TEXT,
+                date_time TEXT
+            )
+        ''')
         conn.commit()
         conn.close()
 
     def hash_password(self, password):
-        """Mã hóa mật khẩu bằng SHA256"""
         return hashlib.sha256(password.encode()).hexdigest()
 
-    # Sửa dòng này: thêm tham số initial_balance
     def register_user(self, username, password, initial_balance):
-        """Đăng ký user mới với số dư tùy chọn"""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
-        
         cursor.execute("SELECT * FROM users WHERE username=?", (username,))
         if cursor.fetchone():
             conn.close()
-            return False, "Tên này đã tồn tại!"
-        
+            return False, "User already exists!"
         hashed_pw = self.hash_password(password)
-        
-        # Sửa dòng này: thay số 1000 cứng bằng biến initial_balance
         cursor.execute("INSERT INTO users VALUES (?, ?, ?)", (username, hashed_pw, initial_balance))
-        
         conn.commit()
         conn.close()
-        return True, f"Đăng ký thành công! Ví: ${initial_balance}"
+        return True, f"Account created! Balance: ${initial_balance}"
 
     def login_user(self, username, password):
-        """Kiểm tra đăng nhập"""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
-        
         hashed_pw = self.hash_password(password)
         cursor.execute("SELECT balance FROM users WHERE username=? AND password=?", (username, hashed_pw))
         result = cursor.fetchone()
         conn.close()
-        
-        if result:
-            return True, result[0] # Trả về số dư
-        else:
-            return False, "Sai tài khoản hoặc mật khẩu!"
+        if result: return True, result[0]
+        else: return False, "Invalid username or password!"
 
     def get_balance(self, username):
-        """Lấy số dư hiện tại"""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         cursor.execute("SELECT balance FROM users WHERE username=?", (username,))
@@ -69,9 +67,27 @@ class DatabaseManager:
         return res[0] if res else 0
 
     def update_balance(self, username, amount):
-        """Cập nhật tiền (amount âm là trừ, dương là cộng)"""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         cursor.execute("UPDATE users SET balance = balance + ? WHERE username=?", (amount, username))
         conn.commit()
         conn.close()
+
+    # --- [MỚI] HÀM THÊM VẬT PHẨM VÀO TÚI ---
+    def add_item(self, username, item_name, price, image_data):
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("INSERT INTO inventory (username, item_name, price, image_data, date_time) VALUES (?, ?, ?, ?, ?)", 
+                       (username, item_name, price, image_data, now))
+        conn.commit()
+        conn.close()
+
+    # --- [MỚI] HÀM LẤY DANH SÁCH ĐỒ ---
+    def get_user_inventory(self, username):
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        cursor.execute("SELECT item_name, price, date_time, image_data FROM inventory WHERE username=?", (username,))
+        items = cursor.fetchall()
+        conn.close()
+        return items
